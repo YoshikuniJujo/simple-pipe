@@ -1,0 +1,4 @@
+bracket :: IO a -> (a -> IO b) -> (a -> Pipe IO i o r) -> Pipe IO i o r
+
+bracket :: (MonadIO m, MonadBase m IO) =>
+	IO a -> (a -> IO b) -> (a -> Pipe m i o r) -> Pipe m i o r
