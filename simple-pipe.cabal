@@ -91,8 +91,9 @@ source-repository	this
 
 library
     hs-source-dirs:	src
-    exposed-modules:	Data.Pipe, Data.Pipe.List
+    exposed-modules:
+        Data.Pipe, Data.Pipe.List, Data.Pipe.IO, Data.Pipe.ByteString
     build-depends:
         base == 4.*, monad-control == 0.3.*, lifted-base == 0.2.*,
-        monads-tf == 0.1.*
+        monads-tf == 0.1.*, bytestring == 0.10.*
     ghc-options:	-Wall
