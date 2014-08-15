@@ -1,4 +1,5 @@
-{-# LANGUAGE TypeFamilies, FlexibleContexts, RankNTypes, PackageImports #-}
+{-# LANGUAGE TupleSections, TypeFamilies, FlexibleContexts, RankNTypes,
+	PackageImports #-}
 
 module Data.Pipe ( PipeClass(..), Pipe, finally, bracket ) where
 
@@ -8,6 +9,9 @@ import Control.Exception.Lifted (onException)
 import Control.Monad.Trans.Control
 import "monads-tf" Control.Monad.Trans
 import "monads-tf" Control.Monad.Error
+import "monads-tf" Control.Monad.State
+import "monads-tf" Control.Monad.Reader
+import "monads-tf" Control.Monad.Writer
 
 class PipeClass p where
 	runPipe :: Monad m => p i o m r -> m (Maybe r)
@@ -26,6 +30,28 @@ data Pipe i o m r
 	| Need (m ()) (Maybe i -> Pipe i o m r)
 	| Done (m ()) r
 	| Make (m ()) (m (Pipe i o m r))
+
+instance MonadWriter m => MonadWriter (Pipe i o m) where
+	type WriterType (Pipe i o m) = WriterType m
+	tell = lift . tell
+	listen (Ready f o p) = Ready f o $ listen p
+	listen (Need f p) = Need f $ \mi -> listen $ p mi
+	listen (Done f r) = Done f (r, mempty)
+	listen (Make f p) = Make f $ do
+		(p', l) <- listen p
+		return $ (, l) `liftM` p'
+	pass (Ready f o p) = Ready f o $ pass p
+	pass (Need f p) = Need f $ \mi -> pass $ p mi
+	pass (Done f (r, _)) = Done f r
+	pass (Make f p) = Make f $ do
+		pass `liftM` p
+
+mapPipe :: Monad m =>
+	(m (Pipe i o m a) -> m (Pipe i o m a)) -> Pipe i o m a -> Pipe i o m a
+mapPipe m (Ready f o p) = Ready f o $ mapPipe m p
+mapPipe m (Need f p) = Need f $ \mi -> mapPipe m $ p mi
+mapPipe _ (Done f r) = Done f r
+mapPipe m (Make f p) = Make f $ mapPipe m `liftM` m p
 
 instance MonadError m => MonadError (Pipe i o m) where
 	type ErrorType (Pipe i o m) = ErrorType m
@@ -100,6 +126,16 @@ instance MonadTrans (Pipe i o) where
 
 instance MonadIO m => MonadIO (Pipe i o m) where
 	liftIO = lift . liftIO
+
+instance MonadState m => MonadState (Pipe i o m) where
+	type StateType (Pipe i o m) = StateType m
+	get = lift get
+	put = lift . put
+
+instance MonadReader m => MonadReader (Pipe i o m) where
+	type EnvType (Pipe i o m) = EnvType m
+	ask = lift ask
+	local = mapPipe . local
 
 liftP :: Monad m => m a -> Pipe i o m a
 liftP m = Make (return ()) $ Done (return ()) `liftM` m

@@ -2,3 +2,15 @@ bracket :: IO a -> (a -> IO b) -> (a -> Pipe IO i o r) -> Pipe IO i o r
 
 bracket :: (MonadIO m, MonadBase m IO) =>
 	IO a -> (a -> IO b) -> (a -> Pipe m i o r) -> Pipe m i o r
+
+---
+
+pass :: m (a, log -> log) -> m a
+
+lift . pass :: m (a, log -> log) -> Pipe i o m a
+
+p :: m (Pipe i o m (r, log -> log))
+
+pass (Make f p) = Make f  $ do
+	p' <- p
+	return $ pass p'
