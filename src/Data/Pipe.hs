@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, RankNTypes, PackageImports #-}
+{-# LANGUAGE TypeFamilies, FlexibleContexts, RankNTypes, PackageImports #-}
 
 module Data.Pipe ( PipeClass(..), Pipe, finally, bracket ) where
 
@@ -7,6 +7,7 @@ import Control.Monad
 import Control.Exception.Lifted (onException)
 import Control.Monad.Trans.Control
 import "monads-tf" Control.Monad.Trans
+import "monads-tf" Control.Monad.Error
 
 class PipeClass p where
 	runPipe :: Monad m => p i o m r -> m (Maybe r)
@@ -25,6 +26,15 @@ data Pipe i o m r
 	| Need (m ()) (Maybe i -> Pipe i o m r)
 	| Done (m ()) r
 	| Make (m ()) (m (Pipe i o m r))
+
+instance MonadError m => MonadError (Pipe i o m) where
+	type ErrorType (Pipe i o m) = ErrorType m
+	throwError e = Make (return ()) $ throwError e
+	Ready f o p `catchError` c = Ready f o $ p `catchError` c
+	Need f p `catchError` c = Need f $ \mi -> p mi `catchError` c
+	Done f r `catchError` _ = Done f r
+	Make f p `catchError` c =
+		Make f . ((`catchError` c) `liftM`) $ p `catchError` (return . c)
 
 finalizer :: Pipe i o m r -> m ()
 finalizer (Ready f _ _) = f
