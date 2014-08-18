@@ -30,14 +30,25 @@ class PipeClass p where
 convert :: (PipeClass p, Monad m, Monad (p a b m)) => (a -> b) -> p a b m ()
 convert f = await >>= maybe (return ()) ((>> convert f) . yield . f)
 
+-- | Minimal complete definition: 'appLeft'
+
 class PipeClass pc => PipeChoice pc where
 	appLeft :: Monad m => pc b c m () -> pc (Either b d) (Either c d) m ()
-	appRight :: Monad m => pc b c m () -> pc (Either d b) (Either d c) m ()
-	(++++) :: Monad m =>
+	appRight :: (Monad m, Monad (pc (Either d b) (Either b d) m),
+		Monad (pc (Either c d) (Either d c) m)) =>
+		pc b c m () -> pc (Either d b) (Either d c) m ()
+	(++++) :: (Monad m, Monad (pc (Either c' c) (Either c c') m),
+		Monad (pc (Either c b') (Either b' c) m) ) =>
 		pc b c m () -> pc b' c' m () -> pc (Either b b') (Either c c') m ()
-	(||||) :: (Monad m, Monad (pc (Either d d) d m)) =>
+	(||||) :: (Monad m, Monad (pc (Either d d) d m),
+		Monad (pc (Either d c) (Either c d) m),
+		Monad (pc (Either d d) (Either d d) m)) =>
 		pc b d m () -> pc c d m () -> pc (Either b c) d m ()
 
+	appRight f = convert mirror =$= appLeft f =$= convert mirror
+		where
+		mirror (Left x) = Right x
+		mirror (Right y) = Left y
 	f ++++ g = appLeft f =$= appRight g
 	f |||| g = (f ++++ g) =$= convert untag
 		where
@@ -58,14 +69,6 @@ instance PipeChoice Pipe where
 		_ -> appLeft $ p Nothing
 	appLeft (Done f r) = Done f r
 	appLeft (Make f p) = Make f $ appLeft `liftM` p
-
-	appRight (Ready f o p) = Ready f (Right o) $ appRight p
-	appRight (Need f p) = Need f $ \mei -> case mei of
-		Just (Right i) -> appRight . p $ Just i
-		Just (Left i) -> yield (Left i) >> appRight (p Nothing)
-		_ -> appRight $ p Nothing
-	appRight (Done f r) = Done f r
-	appRight (Make f p) = Make f $ appRight `liftM` p
 
 instance MonadWriter m => MonadWriter (Pipe i o m) where
 	type WriterType (Pipe i o m) = WriterType m

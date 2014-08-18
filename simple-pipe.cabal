@@ -2,7 +2,7 @@ build-type:	Simple
 cabal-version:	>= 1.8
 
 name:		simple-pipe
-version:	0.0.0.13
+version:	0.0.0.14
 stability:	Experimental
 author:		Yoshikuni Jujo <PAF01143@nifty.ne.jp>
 maintainer:	Yoshikuni Jujo <PAF01143@nifty.ne.jp>
@@ -61,13 +61,6 @@ description:
     > 		Just s -> lift (putStrLn s) >> writeString
     > 		_ -> return ()
     >
-    > convert :: Monad m => (a -> b) -> Pipe a b m ()
-    > convert f = do
-    > 	mx <- await
-    > 	case mx of
-    > 		Just x -> yield (f x) >> convert f
-    > 		_ -> return ()
-    >
     > takeP :: Monad m => Int -> Pipe a a m ()
     > takeP 0 = return ()
     > takeP n = do
@@ -87,7 +80,7 @@ source-repository	head
 source-repository	this
     type:	git
     location:	git://github.com/YoshikuniJujo/simple-pipe.git
-    tag:	simple-pipe-0.0.0.13
+    tag:	simple-pipe-0.0.0.14
 
 library
     hs-source-dirs:	src
