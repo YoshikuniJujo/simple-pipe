@@ -10,7 +10,8 @@ import Data.Pipe
 import System.IO
 import GHC.IO.Exception
 
-fromHandle :: MonadIO m => Handle -> Pipe () Char m ()
+fromHandle :: (PipeClass p, Monad m, MonadIO (p i Char m)) =>
+	Handle -> p i Char m ()
 fromHandle h = do
 	mc <- liftIO $ (Just <$> hGetChar h) `catch` \(e :: IOException) ->
 		case ioe_type e of
@@ -18,11 +19,14 @@ fromHandle h = do
 			_ -> ioException e
 	maybe (return ()) ((>> fromHandle h) . yield) mc
 
-toHandle :: MonadIO m => Handle -> Pipe Char () m ()
+toHandle :: (PipeClass p, Monad m, MonadIO (p Char o m)) =>
+	Handle -> p Char o m ()
 toHandle h = await >>= maybe (return ()) ((>> toHandle h) . liftIO . hPutChar h)
 
-fromFile :: (MonadIO m, MonadBaseControl IO m) => FilePath -> Pipe () Char m ()
+fromFile :: (PipeClass p, MonadIO m, MonadBaseControl IO m,
+	MonadTrans (p i Char), MonadIO (p i Char m)) => FilePath -> p i Char m ()
 fromFile fp = bracket (liftIO $ openFile fp ReadMode) (liftIO . hClose) fromHandle
 
-toFile :: (MonadIO m, MonadBaseControl IO m) => FilePath -> Pipe Char () m ()
+toFile :: (PipeClass p, MonadIO m, MonadBaseControl IO m,
+	MonadTrans (p Char o), MonadIO (p Char o m)) => FilePath -> p Char o m ()
 toFile fp = bracket (liftIO $ openFile fp WriteMode) (liftIO . hClose) toHandle

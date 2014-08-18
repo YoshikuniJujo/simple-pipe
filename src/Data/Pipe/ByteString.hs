@@ -12,7 +12,8 @@ import GHC.IO.Exception
 
 import qualified Data.ByteString.Char8 as BSC
 
-fromHandleLn :: MonadIO m => Handle -> Pipe () BSC.ByteString m ()
+fromHandleLn :: (PipeClass p, Monad m, MonadIO (p i BSC.ByteString m)) =>
+	Handle -> p i BSC.ByteString m ()
 fromHandleLn h = do
 	ml <- liftIO $ (Just <$> BSC.hGetLine h) `catch` \(e :: IOException) ->
 		case ioe_type e of
@@ -20,15 +21,18 @@ fromHandleLn h = do
 			_ -> ioException e
 	maybe (return ()) ((>> fromHandleLn h) . yield) ml
 
-toHandleLn :: MonadIO m => Handle -> Pipe BSC.ByteString () m ()
+toHandleLn :: (PipeClass p, Monad m, MonadIO (p BSC.ByteString o m)) =>
+	Handle -> p BSC.ByteString o m ()
 toHandleLn h =
 	await >>= maybe (return ()) ((>> toHandleLn h) . liftIO . BSC.hPutStrLn h)
 
-fromFileLn :: (MonadIO m, MonadBaseControl IO m) =>
-	FilePath -> Pipe () BSC.ByteString m ()
+fromFileLn :: (PipeClass p, MonadIO m, MonadBaseControl IO m,
+	MonadTrans (p i BSC.ByteString), MonadIO (p i BSC.ByteString m)) =>
+	FilePath -> p i BSC.ByteString m ()
 fromFileLn fp =
 	bracket (liftIO $ openFile fp ReadMode) (liftIO . hClose) fromHandleLn
 
-toFileLn :: (MonadIO m, MonadBaseControl IO m) =>
-	FilePath -> Pipe BSC.ByteString () m ()
+toFileLn :: (PipeClass p, MonadIO m, MonadBaseControl IO m,
+	MonadTrans (p BSC.ByteString o), MonadIO (p BSC.ByteString o m)) =>
+	FilePath -> p BSC.ByteString o m ()
 toFileLn fp = bracket (liftIO $ openFile fp WriteMode) (liftIO . hClose) toHandleLn
