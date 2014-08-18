@@ -1,7 +1,9 @@
 {-# LANGUAGE TupleSections, TypeFamilies, FlexibleContexts, RankNTypes,
 	PackageImports #-}
 
-module Data.Pipe ( PipeClass(..), Pipe, finally, bracket ) where
+module Data.Pipe (
+	PipeClass(..), PipeChoice(..), convert,
+	Pipe, finally, bracket ) where
 
 import Control.Applicative
 import Control.Monad
@@ -25,11 +27,45 @@ class PipeClass p where
 
 	p `finalize` f = p `onBreak` f `onDone` f
 
+convert :: (PipeClass p, Monad m, Monad (p a b m)) => (a -> b) -> p a b m ()
+convert f = await >>= maybe (return ()) ((>> convert f) . yield . f)
+
+class PipeClass pc => PipeChoice pc where
+	appLeft :: Monad m => pc b c m () -> pc (Either b d) (Either c d) m ()
+	appRight :: Monad m => pc b c m () -> pc (Either d b) (Either d c) m ()
+	(++++) :: Monad m =>
+		pc b c m () -> pc b' c' m () -> pc (Either b b') (Either c c') m ()
+	(||||) :: (Monad m, Monad (pc (Either d d) d m)) =>
+		pc b d m () -> pc c d m () -> pc (Either b c) d m ()
+
+	f ++++ g = appLeft f =$= appRight g
+	f |||| g = (f ++++ g) =$= convert untag
+		where
+		untag (Left x) = x
+		untag (Right y) = y
+
 data Pipe i o m r
 	= Ready (m ()) o (Pipe i o m r)
 	| Need (m ()) (Maybe i -> Pipe i o m r)
 	| Done (m ()) r
 	| Make (m ()) (m (Pipe i o m r))
+
+instance PipeChoice Pipe where
+	appLeft (Ready f o p) = Ready f (Left o) $ appLeft p
+	appLeft (Need f p) = Need f $ \mei -> case mei of
+		Just (Left i) -> appLeft . p $ Just i
+		Just (Right i) -> yield (Right i) >> appLeft (p Nothing)
+		_ -> appLeft $ p Nothing
+	appLeft (Done f r) = Done f r
+	appLeft (Make f p) = Make f $ appLeft `liftM` p
+
+	appRight (Ready f o p) = Ready f (Right o) $ appRight p
+	appRight (Need f p) = Need f $ \mei -> case mei of
+		Just (Right i) -> appRight . p $ Just i
+		Just (Left i) -> yield (Left i) >> appRight (p Nothing)
+		_ -> appRight $ p Nothing
+	appRight (Done f r) = Done f r
+	appRight (Make f p) = Make f $ appRight `liftM` p
 
 instance MonadWriter m => MonadWriter (Pipe i o m) where
 	type WriterType (Pipe i o m) = WriterType m
