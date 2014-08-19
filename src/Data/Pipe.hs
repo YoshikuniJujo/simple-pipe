@@ -65,7 +65,7 @@ instance PipeChoice Pipe where
 	appLeft (Ready f o p) = Ready f (Left o) $ appLeft p
 	appLeft (Need f p) = Need f $ \mei -> case mei of
 		Just (Left i) -> appLeft . p $ Just i
-		Just (Right i) -> yield (Right i) >> appLeft (p Nothing)
+		Just (Right i) -> yield (Right i) >> appLeft (Need f p)
 		_ -> appLeft $ p Nothing
 	appLeft (Done f r) = Done f r
 	appLeft (Make f p) = Make f $ appLeft `liftM` p
