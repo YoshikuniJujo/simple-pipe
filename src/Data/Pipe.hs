@@ -2,7 +2,7 @@
 	PackageImports #-}
 
 module Data.Pipe (
-	PipeClass(..), PipeChoice(..), convert,
+	PipeClass(..), PipeChoice(..), (=@=), convert,
 	Pipe, finally, bracket ) where
 
 import Control.Applicative
@@ -14,6 +14,10 @@ import "monads-tf" Control.Monad.Error
 import "monads-tf" Control.Monad.State
 import "monads-tf" Control.Monad.Reader
 import "monads-tf" Control.Monad.Writer
+
+infixr 2 =@=
+infixr 3 =$=
+infixr 4 ++++, ||||
 
 class PipeClass p where
 	runPipe :: Monad m => p i o m r -> m (Maybe r)
@@ -196,3 +200,19 @@ finally p f = finalize (mapMonad (`onException` f) p) f
 
 voidM :: Monad m => m a -> m ()
 voidM = (>> return ())
+
+passResult :: (PipeClass p, Monad m, Monad (p i (Either a r) m)) =>
+	p i a m r -> p i (Either a r) m ()
+passResult s = mapOut Left s >>= yield . Right
+
+recvResult :: (PipeClass p, PipeChoice p, Monad m,
+	Monad (p a o m), Monad (p r o m), Monad (p (Either a r) o m)) =>
+	p a o m r' -> p (Either a r) o m r
+recvResult p =
+	(p >> return undefined) |||| (await >>= maybe (return undefined) return)
+
+
+(=@=) :: (PipeClass p, PipeChoice p, Monad m, Monad (p i (Either a r) m),
+	Monad (p a o m), Monad (p r o m), Monad (p (Either a r) o m)) =>
+	p i a m r -> p a o m r' -> p i o m r
+p1 =@= p2 = passResult p1 =$= recvResult p2
