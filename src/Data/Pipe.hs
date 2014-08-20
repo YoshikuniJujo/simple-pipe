@@ -24,6 +24,8 @@ class PipeClass p where
 	onDone :: Monad m => p i o m r -> m b -> p i o m r
 	finalize :: Monad m => p i o m r -> m b -> p i o m r
 	mapMonad :: Monad m => (forall a . m a -> m a) -> p i o m r -> p i o m r
+	mapOut :: Monad m => (o -> o') -> p i o m r -> p i o' m r
+	mapIn :: Monad m => (i' -> i) -> p i o m r -> p i' o m r
 
 	p `finalize` f = p `onBreak` f `onDone` f
 
@@ -33,24 +35,18 @@ convert f = await >>= maybe (return ()) ((>> convert f) . yield . f)
 -- | Minimal complete definition: 'appLeft'
 
 class PipeClass pc => PipeChoice pc where
-	appLeft :: Monad m => pc b c m () -> pc (Either b d) (Either c d) m ()
-	appRight :: (Monad m, Monad (pc (Either d b) (Either b d) m),
-		Monad (pc (Either c d) (Either d c) m)) =>
-		pc b c m () -> pc (Either d b) (Either d c) m ()
-	(++++) :: (Monad m, Monad (pc (Either c' c) (Either c c') m),
-		Monad (pc (Either c b') (Either b' c) m) ) =>
+	appLeft :: Monad m => pc b c m r -> pc (Either b d) (Either c d) m r
+	appRight :: Monad m => pc b c m r -> pc (Either d b) (Either d c) m r
+	(++++) :: Monad m =>
 		pc b c m () -> pc b' c' m () -> pc (Either b b') (Either c c') m ()
-	(||||) :: (Monad m, Monad (pc (Either d d) d m),
-		Monad (pc (Either d c) (Either c d) m),
-		Monad (pc (Either d d) (Either d d) m)) =>
-		pc b d m () -> pc c d m () -> pc (Either b c) d m ()
+	(||||) :: Monad m => pc b d m () -> pc c d m () -> pc (Either b c) d m ()
 
-	appRight f = convert mirror =$= appLeft f =$= convert mirror
+	appRight f = mapIn mirror . mapOut mirror $ appLeft f
 		where
 		mirror (Left x) = Right x
 		mirror (Right y) = Left y
 	f ++++ g = appLeft f =$= appRight g
-	f |||| g = (f ++++ g) =$= convert untag
+	f |||| g = mapOut untag (f ++++ g)
 		where
 		untag (Left x) = x
 		untag (Right y) = y
@@ -85,12 +81,12 @@ instance MonadWriter m => MonadWriter (Pipe i o m) where
 	pass (Make f p) = Make f $ do
 		pass `liftM` p
 
-mapPipe :: Monad m =>
+mapPipeM :: Monad m =>
 	(m (Pipe i o m a) -> m (Pipe i o m a)) -> Pipe i o m a -> Pipe i o m a
-mapPipe m (Ready f o p) = Ready f o $ mapPipe m p
-mapPipe m (Need f p) = Need f $ \mi -> mapPipe m $ p mi
-mapPipe _ (Done f r) = Done f r
-mapPipe m (Make f p) = Make f $ mapPipe m `liftM` m p
+mapPipeM m (Ready f o p) = Ready f o $ mapPipeM m p
+mapPipeM m (Need f p) = Need f $ \mi -> mapPipeM m $ p mi
+mapPipeM _ (Done f r) = Done f r
+mapPipeM m (Make f p) = Make f $ mapPipeM m `liftM` m p
 
 instance MonadError m => MonadError (Pipe i o m) where
 	type ErrorType (Pipe i o m) = ErrorType m
@@ -145,6 +141,16 @@ instance PipeClass Pipe where
 	mapMonad _ (Done f r) = Done f r
 	mapMonad k (Make f m) = Make f . k $ mapMonad k `liftM` m
 
+	mapOut c (Ready f o p) = Ready f (c o) $ mapOut c p
+	mapOut c (Need f p) = Need f $ \i -> mapOut c (p i)
+	mapOut _ (Done f r) = Done f r
+	mapOut c (Make f m) = Make f $ mapOut c `liftM` m
+
+	mapIn c (Ready f o p) = Ready f o $ mapIn c p
+	mapIn c (Need f p) = Need f $ \i -> mapIn c (p $ c <$> i)
+	mapIn _ (Done f r) = Done f r
+	mapIn c (Make f m) = Make f $ mapIn c `liftM` m
+
 instance Monad m => Monad (Pipe i o m) where
 	Ready f o p >>= k = Ready f o $ p >>= k
 	Need f n >>= k = Need f $ n >=> k
@@ -174,7 +180,7 @@ instance MonadState m => MonadState (Pipe i o m) where
 instance MonadReader m => MonadReader (Pipe i o m) where
 	type EnvType (Pipe i o m) = EnvType m
 	ask = lift ask
-	local = mapPipe . local
+	local = mapPipeM . local
 
 liftP :: Monad m => m a -> Pipe i o m a
 liftP m = Make (return ()) $ Done (return ()) `liftM` m
