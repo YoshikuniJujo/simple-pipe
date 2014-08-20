@@ -38,8 +38,8 @@ class PipeClass pc => PipeChoice pc where
 	appLeft :: Monad m => pc b c m r -> pc (Either b d) (Either c d) m r
 	appRight :: Monad m => pc b c m r -> pc (Either d b) (Either d c) m r
 	(++++) :: Monad m =>
-		pc b c m () -> pc b' c' m () -> pc (Either b b') (Either c c') m ()
-	(||||) :: Monad m => pc b d m () -> pc c d m () -> pc (Either b c) d m ()
+		pc b c m r -> pc b' c' m r -> pc (Either b b') (Either c c') m r
+	(||||) :: Monad m => pc b d m r -> pc c d m r -> pc (Either b c) d m r
 
 	appRight f = mapIn mirror . mapOut mirror $ appLeft f
 		where
