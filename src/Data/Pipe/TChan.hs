@@ -1,8 +1,9 @@
-{-# LANGUAGE FlexibleContexts, PackageImports #-}
+{-# LANGUAGE TupleSections, FlexibleContexts, PackageImports #-}
 
 module Data.Pipe.TChan (fromTChan, toTChan, fromTChans, toTChans) where
 
 import Control.Applicative
+import Control.Arrow
 import "monads-tf" Control.Monad.Trans
 import Control.Monad.Base
 import Control.Concurrent.STM
@@ -15,14 +16,19 @@ fromTChan c = lift (liftBase . atomically $ readTChan c) >>= yield >> fromTChan 
 
 fromTChans :: (PipeClass p, MonadBase IO m,
 	MonadTrans (p x a), Monad (p x a m)) => [TChan a] -> p x a m ()
-fromTChans cs = (>> fromTChans cs) . (yield =<<) . lift . liftBase . atomically $ do
-	readTChans cs >>= maybe retry return
+fromTChans cs = do
+	(cs', x) <- lift . liftBase . atomically $ do
+		readTChans cs >>= maybe retry return
+	yield x
+	fromTChans $ uncurry (flip (++)) cs'
 
-readTChans :: [TChan a] -> STM (Maybe a)
+readTChans :: [TChan a] -> STM (Maybe (([TChan a], [TChan a]), a))
 readTChans [] = return Nothing
 readTChans (c : cs) = do
 	e <- isEmptyTChan c
-	if e then readTChans cs else Just <$> readTChan c
+	if e
+	then (first (first (c :)) <$>) <$>  readTChans cs
+	else Just . (([c], cs) ,) <$> readTChan c
 
 toTChan :: (PipeClass p, MonadBase IO m,
 	MonadTrans (p a x), Monad (p a x m)) => TChan a -> p a x m ()
