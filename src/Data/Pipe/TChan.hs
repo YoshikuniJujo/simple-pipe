@@ -1,13 +1,12 @@
 {-# LANGUAGE FlexibleContexts, PackageImports #-}
 
-module Data.Pipe.TChan (
-	fromTChan, fromTChans, toTChan,
-	) where
+module Data.Pipe.TChan (fromTChan, toTChan, fromTChans, toTChans) where
 
 import Control.Applicative
 import "monads-tf" Control.Monad.Trans
 import Control.Monad.Base
 import Control.Concurrent.STM
+import Data.List
 import Data.Pipe
 
 fromTChan :: (PipeClass p, MonadBase IO m,
@@ -29,3 +28,11 @@ toTChan :: (PipeClass p, MonadBase IO m,
 	MonadTrans (p a x), Monad (p a x m)) => TChan a -> p a x m ()
 toTChan c = await >>= maybe (return ())
 	((>> toTChan c) . lift . liftBase . atomically . writeTChan c)
+
+toTChans :: (PipeClass p, MonadBase IO m,
+	MonadTrans (p (a, b) x), Monad (p (a, b) x m)) =>
+	[(a -> Bool, TChan b)] -> p (a, b) x m ()
+toTChans cs = (await >>=) . maybe (return ()) $ \(t, x) -> (>> toTChans cs) $
+	case find (($ t) . fst) cs of
+		Just (_, c)-> lift . liftBase . atomically $ writeTChan c x
+		_ -> return ()
