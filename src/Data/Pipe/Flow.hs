@@ -9,7 +9,7 @@ before p = await >>= maybe (return ()) (\x -> unless (p x) $ yield x >> before p
 
 until :: (PipeClass p, Monad m, Monad (p a a m)) => (a -> Bool) -> p a a m ()
 until p = (await >>=) . maybe (return ()) $ \x ->
-	if p x then yield x else yield x >> before p
+	if p x then yield x else yield x >> until p
 
 filter :: (PipeClass p, Monad m, Monad (p a a m)) => (a -> Bool) -> p a a m ()
 filter p = (await >>=) . maybe (return ()) $ \x ->
