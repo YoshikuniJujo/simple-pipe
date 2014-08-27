@@ -1,6 +1,7 @@
 {-# LANGUAGE TupleSections, FlexibleContexts, PackageImports #-}
 
-module Data.Pipe.TChan (fromTChan, toTChan, fromTChans, toTChans) where
+module Data.Pipe.TChan (
+	fromTChan, toTChan, fromTChans, toTChans, toTChansM) where
 
 import Control.Applicative
 import Control.Arrow
@@ -39,6 +40,15 @@ toTChans :: (PipeClass p, MonadBase IO m,
 	MonadTrans (p (a, b) x), Monad (p (a, b) x m)) =>
 	[(a -> Bool, TChan b)] -> p (a, b) x m ()
 toTChans cs = (await >>=) . maybe (return ()) $ \(t, x) -> (>> toTChans cs) $
+	case find (($ t) . fst) cs of
+		Just (_, c)-> lift . liftBase . atomically $ writeTChan c x
+		_ -> return ()
+
+toTChansM :: (PipeClass p, MonadBase IO m,
+	MonadTrans (p (a, b) x), Monad (p (a, b) x m)) =>
+	m [(a -> Bool, TChan b)] -> p (a, b) x m ()
+toTChansM mcs = (await >>=) . maybe (return ()) $ \(t, x) -> (>> toTChansM mcs) $ do
+	cs <- lift mcs
 	case find (($ t) . fst) cs of
 		Just (_, c)-> lift . liftBase . atomically $ writeTChan c x
 		_ -> return ()
