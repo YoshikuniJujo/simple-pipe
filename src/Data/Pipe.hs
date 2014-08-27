@@ -2,7 +2,7 @@
 	PackageImports #-}
 
 module Data.Pipe (
-	PipeClass(..), PipeChoice(..), (=@=), convert,
+	PipeClass(..), PipeChoice(..), (=@=), runPipe_, convert,
 	Pipe, finally, bracket ) where
 
 import Control.Applicative
@@ -32,6 +32,9 @@ class PipeClass p where
 	mapIn :: Monad m => (i' -> i) -> p i o m r -> p i' o m r
 
 	p `finalize` f = p `onBreak` f `onDone` f
+
+runPipe_ :: (PipeClass p, Monad m) => p i o m r -> m ()
+runPipe_ = (>> return ()) . runPipe
 
 convert :: (PipeClass p, Monad m, Monad (p a b m)) => (a -> b) -> p a b m ()
 convert f = await >>= maybe (return ()) ((>> convert f) . yield . f)
