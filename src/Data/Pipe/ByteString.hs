@@ -2,7 +2,8 @@
 
 module Data.Pipe.ByteString (
 	fromHandle, toHandle, fromFile, toFile,
-	fromHandleLn, toHandleLn, fromFileLn, toFileLn) where
+	fromHandleLn, toHandleLn, fromFileLn, toFileLn,
+	toLazy) where
 
 import Control.Applicative
 import "monads-tf" Control.Monad.Trans
@@ -10,11 +11,13 @@ import Control.Monad.Trans.Control
 import Control.Monad.Base
 import Control.Exception (catch)
 import Data.Pipe
+import qualified Data.Pipe.Lazy as L
 import System.IO
 import GHC.IO.Exception
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
+import qualified Data.ByteString.Lazy as LBS
 
 bufferSize :: Int
 bufferSize = 65536
@@ -78,3 +81,7 @@ toFile :: (PipeClass p, MonadBaseControl IO m,
 toFile fp = bracket
 	(liftBase $ openFile fp WriteMode)
 	(liftBase . hClose) toHandle
+
+toLazy :: (PipeClass p, L.PipeLazy p, MonadBaseControl IO m) =>
+	p i BSC.ByteString m r -> m LBS.ByteString
+toLazy = (LBS.fromChunks <$>) . L.toLazy
