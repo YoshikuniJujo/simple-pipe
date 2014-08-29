@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables, PackageImports #-}
 
 module Data.Pipe.ByteString (
-	fromHandle, toHandle,
+	fromHandle, toHandle, fromFile, toFile,
 	fromHandleLn, toHandleLn, fromFileLn, toFileLn) where
 
 import Control.Applicative
@@ -53,10 +53,28 @@ toFileLn fp = bracket
 fromHandle :: (PipeClass p, MonadBase IO m,
 	MonadTrans (p i BSC.ByteString), Monad (p i BSC.ByteString m)) =>
 	Handle -> p i BSC.ByteString m ()
-fromHandle h = lift (liftBase $ BS.hGetSome h bufferSize) >>= yield >> fromHandle h
+fromHandle h = do
+	eof <- lift . liftBase $ hIsEOF h
+	if eof then return () else do
+		bs <- lift . liftBase $ BS.hGetSome h bufferSize
+		yield bs
+		fromHandle h
 
 toHandle :: (PipeClass p, MonadBase IO m,
 	MonadTrans (p BSC.ByteString o), Monad (p BSC.ByteString o m)) =>
 	Handle -> p BSC.ByteString o m ()
 toHandle h = await >>= maybe (return ())
 	((>> toHandle h) . lift . liftBase . BSC.hPut h)
+
+fromFile :: (PipeClass p, MonadBaseControl IO m,
+	MonadTrans (p i BSC.ByteString), Monad (p i BSC.ByteString m)) =>
+	FilePath -> p i BSC.ByteString m ()
+fromFile fp =
+	bracket (liftBase $ openFile fp ReadMode) (liftBase . hClose) fromHandle
+
+toFile :: (PipeClass p, MonadBaseControl IO m,
+	MonadTrans (p BSC.ByteString o), Monad (p BSC.ByteString o m)) =>
+	FilePath -> p BSC.ByteString o m ()
+toFile fp = bracket
+	(liftBase $ openFile fp WriteMode)
+	(liftBase . hClose) toHandle

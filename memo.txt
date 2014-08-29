@@ -14,3 +14,8 @@ p :: m (Pipe i o m (r, log -> log))
 pass (Make f p) = Make f  $ do
 	p' <- p
 	return $ pass p'
+
+---
+
+Ready o (Make (m (Ready o (Make (m (Ready o (Make (m (Ready o (Make (m (Ready
+o (Make ...
