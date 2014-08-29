@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables, PackageImports #-}
 
-module Data.Pipe.IO (
-	fromHandle, toHandle, fromFile, toFile, debug) where
+module Data.Pipe.IO (fromHandle, toHandle, fromFile, toFile, debug) where
 
 import Control.Applicative
 import "monads-tf" Control.Monad.Trans

@@ -85,8 +85,11 @@ source-repository	this
 library
     hs-source-dirs:	src
     exposed-modules:
-        Data.Pipe, Data.Pipe.Flow, Data.Pipe.List,
+        Data.Pipe, Data.Pipe.Lazy,
+        Data.Pipe.Flow, Data.Pipe.List,
         Data.Pipe.IO, Data.Pipe.ByteString, Data.Pipe.TChan
+    other-modules:
+        Data.Pipe.Core
     build-depends:
         base == 4.*, monad-control == 0.3.*, lifted-base == 0.2.*,
         monads-tf == 0.1.*, bytestring == 0.10.*, transformers-base == 0.4.*,
