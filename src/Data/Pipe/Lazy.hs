@@ -15,10 +15,10 @@ class PipeClass pl => PipeLazy pl where
 instance PipeLazy Pipe where toLazy = toLazyP
 
 toLazyP :: MonadBaseControl IO m => Pipe i o m r -> m [o]
-toLazyP (Ready f o p) = (o :) `liftM` unsafeInterleaveIO (toLazyP p)
-toLazyP (Need f p) = toLazyP $ p Nothing
-toLazyP (Done f r) = return []
-toLazyP (Make f p) = toLazyP =<< p
+toLazyP (Ready _ o p) = (o :) `liftM` unsafeInterleaveIO (toLazyP p)
+toLazyP (Need _ p) = toLazyP $ p Nothing
+toLazyP (Done _ _) = return []
+toLazyP (Make _ p) = toLazyP =<< p
 
 unsafeInterleaveIO :: MonadBaseControl IO m => m a -> m a
 unsafeInterleaveIO m = control $ \runInIO -> U.unsafeInterleaveIO (runInIO m)
